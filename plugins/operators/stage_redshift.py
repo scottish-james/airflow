@@ -3,7 +3,6 @@ from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
-
 class StageToRedshiftOperator(BaseOperator):
     ui_color = '#358140'
 
@@ -14,6 +13,7 @@ class StageToRedshiftOperator(BaseOperator):
         FROM '{}'
         ACCESS_KEY_ID '{}'
         SECRET_ACCESS_KEY '{}'
+        SESSION_TOKEN '{}'
         JSON '{}'
         REGION '{}'
     """
@@ -28,7 +28,9 @@ class StageToRedshiftOperator(BaseOperator):
                  json_path="auto",
                  region="us-west-2",
                  *args, **kwargs):
+
         super(StageToRedshiftOperator, self).__init__(*args, **kwargs)
+        # Save all the parameters as instance variables
         self.redshift_conn_id = redshift_conn_id
         self.aws_credentials_id = aws_credentials_id
         self.table = table
@@ -66,6 +68,7 @@ class StageToRedshiftOperator(BaseOperator):
             s3_path,
             credentials.access_key,
             credentials.secret_key,
+            credentials.token,  # Add this line for the session token
             self.json_path,
             self.region
         )
