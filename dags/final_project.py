@@ -19,10 +19,10 @@ from helpers import SqlQueries
 logger = logging.getLogger(__name__)
 
 default_args = {
-    'owner': 'udacity',
+    'owner': 'james_taylor',
     'start_date': pendulum.datetime(2024, 1, 1, tz="UTC"),  # Fixed start_date
     'depends_on_past': False,
-    'retries': 0,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5),
     'email_on_retry': False
 }

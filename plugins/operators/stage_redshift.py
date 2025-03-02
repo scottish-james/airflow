@@ -3,9 +3,12 @@ from airflow.contrib.hooks.aws_hook import AwsHook
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
-class StageToRedshiftOperator(BaseOperator):
-    ui_color = '#358140'
 
+class StageToRedshiftOperator(BaseOperator):
+    """
+    Custom Airflow Operator to copy data from S3 to Redshift staging tables.
+    """
+    ui_color = '#358140'
     template_fields = ("s3_key",)
 
     copy_sql = """
@@ -19,18 +22,30 @@ class StageToRedshiftOperator(BaseOperator):
     """
 
     @apply_defaults
-    def __init__(self,
-                 redshift_conn_id="redshift",
-                 aws_credentials_id="aws_credentials",
-                 table="",
-                 s3_bucket="",
-                 s3_key="",
-                 json_path="auto",
-                 region="us-west-2",
-                 *args, **kwargs):
+    def __init__(
+        self,
+        redshift_conn_id: str = "redshift",
+        aws_credentials_id: str = "aws_credentials",
+        table: str = "",
+        s3_bucket: str = "",
+        s3_key: str = "",
+        json_path: str = "auto",
+        region: str = "us-west-2",
+        *args, **kwargs
+    ):
+        """
+        Initialize the StageToRedshiftOperator.
 
-        super(StageToRedshiftOperator, self).__init__(*args, **kwargs)
-        # Save all the parameters as instance variables
+        :param redshift_conn_id: Airflow connection ID for Redshift
+        :param aws_credentials_id: Airflow connection ID for AWS credentials
+        :param table: Target Redshift table
+        :param s3_bucket: S3 bucket name
+        :param s3_key: S3 object key (supports templating)
+        :param json_path: JSON format path (default: 'auto')
+        :param region: AWS region (default: 'us-west-2')
+        """
+        super().__init__(*args, **kwargs)
+
         self.redshift_conn_id = redshift_conn_id
         self.aws_credentials_id = aws_credentials_id
         self.table = table
@@ -41,38 +56,37 @@ class StageToRedshiftOperator(BaseOperator):
 
     def execute(self, context):
         """
-        Copy data from S3 to Redshift staging tables
-        using the provided parameters
+        Execute the task: Copy data from S3 to Redshift staging table.
         """
-        self.log.info('StageToRedshiftOperator is starting')
+        self.log.info("StageToRedshiftOperator is starting...")
 
-        # AWS credentials
+        # Get AWS credentials
         aws_hook = AwsHook(self.aws_credentials_id)
         credentials = aws_hook.get_credentials()
 
-        # Redshift connection
+        # Connect to Redshift
         redshift = PostgresHook(postgres_conn_id=self.redshift_conn_id)
 
-        # Clear the staging table
-        self.log.info(f"Clearing data from destination Redshift table {self.table}")
+        # Clear existing data in the target table
+        self.log.info(f"Clearing data from Redshift table {self.table}")
         redshift.run(f"DELETE FROM {self.table}")
 
-        # Render the S3 key with the execution date if needed
+        # Render S3 key with execution context
         rendered_key = self.s3_key.format(**context)
         s3_path = f"s3://{self.s3_bucket}/{rendered_key}"
 
-        # Prepare the COPY command
+        # Prepare COPY SQL command
         self.log.info(f"Copying data from {s3_path} to Redshift table {self.table}")
-        formatted_sql = StageToRedshiftOperator.copy_sql.format(
+        formatted_sql = self.copy_sql.format(
             self.table,
             s3_path,
             credentials.access_key,
             credentials.secret_key,
-            credentials.token,  # Add this line for the session token
+            credentials.token,  # Ensures session token is included
             self.json_path,
             self.region
         )
 
-        # Execute the COPY command
+        # Execute COPY command in Redshift
         redshift.run(formatted_sql)
         self.log.info(f"Successfully copied data to {self.table}")
