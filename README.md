@@ -7,7 +7,7 @@ This project implements an ETL (Extract, Transform, Load) pipeline using Apache 
 This data pipeline:
 1. Extracts song and user activity data from S3
 2. Stages the raw data in Redshift
-3. Transforms the data into a star schema optimized for analytical queries
+3. Transforms the data into a star schema optimised for analytical queries
 4. Performs data quality checks to ensure data integrity
 
 The project showcases best practices in data engineering, including custom Airflow operators, modular pipeline design, and automated data validation.
@@ -28,12 +28,21 @@ The data is modeled using a star schema with:
 ```
 .
 ├── dags/                     # Airflow DAG definitions
-│   ├── aws_setup_dag.py      # DAG for setting up AWS resources
-│   └── final_project.py      # Main ETL pipeline DAG
+│   ├── aws_setup_dag.py      # DAG for setting up AWS resources (legacy version)
+│   ├── aws_setup_dag_v2.py   # Modular DAG for setting up AWS resources
+│   ├── final_project.py      # Main ETL pipeline DAG
+│   └── tasks/                # Modular task definitions
+│       ├── __init__.py       # Package initialization
+│       ├── aws.py            # AWS-related tasks
+│       ├── config.py         # Configuration loading tasks
+│       ├── database.py       # Database setup tasks
+│       └── redshift.py       # Redshift setup tasks
 ├── plugins/
 │   ├── helpers/              # Helper modules
+│   │   ├── __init__.py       # Package initialization
 │   │   └── sql_queries.py    # SQL transformation queries
 │   └── operators/            # Custom Airflow operators
+│       ├── __init__.py       # Package initialization
 │       ├── data_quality.py   # Data quality checking operator
 │       ├── load_dimension.py # Dimension table loading operator
 │       ├── load_fact.py      # Fact table loading operator
@@ -84,7 +93,7 @@ The pipeline follows this workflow:
 docker-compose up -d
 ```
 
-4. Access the Airflow web UI at http://localhost:8080
+4. Access the Airflow web UI at http://localhost:8081
    - Username: `airflow`
    - Password: `airflow`
 
@@ -94,18 +103,22 @@ docker-compose up -d
    - Add a `redshift` connection with your Redshift serverless endpoint details
 
 6. Run the setup DAG first to create AWS resources (if needed):
-   - Trigger the `aws_setup_dag`
+   - Trigger the `aws_setup_dag_v2` (recommended) or `aws_setup_dag`
 
 7. Once setup is complete, trigger the main ETL pipeline:
    - Trigger the `final_project` DAG
 
 ## AWS Setup DAG
 
-The `aws_setup_dag` automates the entire AWS infrastructure provisioning process. This DAG is designed to be run once before executing the main ETL pipeline.
+The project includes two versions of the AWS setup DAG:
 
-### DAG Structure
+### Legacy Version (`aws_setup_dag.py`)
+This is the original monolithic implementation that sets up all AWS resources in a single file.
 
-The `aws_setup_dag` follows these sequential steps:
+### Modular Version (`aws_setup_dag_v2.py`) - Recommended
+This new modular implementation breaks down tasks into reusable components in the `dags/tasks/` directory for better maintainability and readability.
+
+Both DAGs automate the AWS infrastructure provisioning process:
 
 1. **Load Configuration** - Reads the AWS and Redshift configuration from the `config/iac.cfg` file
 2. **Verify AWS Connection** - Validates that the AWS credentials are properly configured in Airflow
@@ -116,16 +129,9 @@ The `aws_setup_dag` follows these sequential steps:
 7. **Setup Redshift Connection** - Configures the Airflow connection to Redshift
 8. **Create Tables** - Creates the necessary staging and analytics tables in Redshift
 
-### Key Features
-
-- **Error Handling** - Comprehensive error handling with detailed logging
-- **Idempotence** - Can be run multiple times safely (cleans up existing resources if needed)
-- **Configuration Management** - Uses a centralized configuration file for all AWS resources
-- **Session Token Support** - Properly handles AWS temporary credentials with session tokens
-
 ### Configuration Parameters
 
-The `aws_setup_dag` uses the following configuration parameters from `config/iac.cfg`:
+The AWS setup DAGs use the following configuration parameters from `config/iac.cfg`:
 
 ```ini
 [AWS]
@@ -145,22 +151,16 @@ LOG_JSONPATH=s3://udacity-dend/log_json_path.json
 SONG_DATA=s3://udacity-dend/song_data
 ```
 
-### Running the Setup DAG
+## ETL Pipeline DAG (`final_project.py`)
 
-To run the setup DAG:
+The ETL pipeline DAG (`final_project.py`) orchestrates the data flow from S3 to Redshift:
 
-1. Ensure your AWS credentials are configured in Airflow (Admin > Connections > aws_credentials)
-2. Navigate to the DAGs view in the Airflow UI
-3. Find `aws_setup_dag` and click the "Trigger DAG" button
-4. Monitor the task progress in the Graph or Tree view
-5. Once all tasks show as successful, your AWS infrastructure is ready for the ETL pipeline
-
-### Important Notes
-
-- The setup DAG requires appropriate AWS permissions to create IAM roles and Redshift resources
-- The process takes approximately 5-10 minutes to complete
-- Redshift Serverless incurs costs as long as it's running (~$0.5-1 per hour depending on configuration)
-- Remember to clean up AWS resources when they're no longer needed to avoid unnecessary charges
+1. **Verify AWS Credentials** - Ensures AWS connectivity
+2. **Test S3 Connection** - Validates access to the source data
+3. **Stage Data** - Copies raw data from S3 to Redshift staging tables
+4. **Load Fact Table** - Transforms and loads data into the songplays fact table
+5. **Load Dimension Tables** - Transforms and loads data into dimension tables
+6. **Run Data Quality Checks** - Validates the integrity of the loaded data
 
 ## Data Sources
 
@@ -174,7 +174,7 @@ This project uses two datasets stored in S3:
    - Location: `s3://udacity-dend/log_data`
    - Example fields: userId, firstName, lastName, gender, level, location, userAgent
 
-## Customization
+## Customisation
 
 - Modify `sql_queries.py` to change the transformation logic
 - Adjust the DAG schedule in `final_project.py` to change the execution frequency
@@ -188,6 +188,11 @@ If you encounter any issues:
 2. Verify your AWS credentials and permissions
 3. Ensure your Redshift Serverless instance is running
 4. Confirm that the S3 buckets are accessible
+
+## Important Notes
+
+- Redshift Serverless incurs costs as long as it's running (~$0.5-1 per hour depending on configuration)
+- Remember to clean up AWS resources when they're no longer needed to avoid unnecessary charges
 
 ## Acknowledgments
 
